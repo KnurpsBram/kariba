@@ -199,3 +199,26 @@ def mcts(root_node, n=100):
 
     best_action = root_node.best_action
     return best_action
+
+
+# MOISMCTS Multiple-Observer Information Set Monte Carlo Tree Search
+def moismcts(root_node, n=100):
+    ## TEMPORARY PSUEDOCODE
+    trees = [Tree(player1), Tree(Player2)]
+    for _ in tqdm.tqdm(range(n)):
+        kariba = root_node.kariba
+        while not kariba.is_final:
+            deck_draw = kariba.draw_random_cards() # draw card for 1 player. only first time might do nothing
+            kariba.apply_deck_draw(deck_draw)
+            action = trees[kariba.whose_turn].select_action() # select best-UCB action, unless this is a node we know nothing of, then just be random
+            kariba.apply_action(action)
+            for tree in trees:
+                # selecting a node means to either create a new node if it doesn't yet exist for the current state, (considering observability)
+                # or selecting the one that does exists such that you can select one of its children based on UCB.
+                # only create new nodes if the the parent node has made more simulations,
+                # otherwise you'll create a really deep branch upon your very first simulations
+                tree.next_node(kariba)
+            kariba.next_turn()
+        winner = kariba.leading_player
+        for tree in trees:
+            tree.backpropagate(winner)
