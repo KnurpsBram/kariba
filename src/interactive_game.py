@@ -9,13 +9,7 @@ from src.kariba import Kariba
 
 def interactive_game(n=100):
 
-    def get_action():
-        action = util.action_str_to_arr(input("What's your move?"))
-        if any([np.array_equal(action, allowed_action) for allowed_action in kariba.allowed_actions]):
-            return action
-        else:
-            print("Erm. That's not a valid move")
-            return get_action()
+
 
     human_name         = input("Okay Human! what is your name? ")
     show_opponent_hand = util.str_to_bool(input("Do you want the AI's cards to be visible to you? (y/n)"))
@@ -32,8 +26,20 @@ def interactive_game(n=100):
         player_names = player_names,
         whose_turn   = whose_turn,
         show_hands   = [True, show_opponent_hand],
-        show_deck    = show_deck
+        show_deck    = show_deck,
+        n_species    = 5
     )
+
+    def get_action():
+        action = kariba.action_str_to_arr(input("What's your move?"))
+
+        
+
+        if any([np.array_equal(action, allowed_action) for allowed_action in kariba.allowed_actions]):
+            return action
+        else:
+            print("Erm. That's not a valid move")
+            return get_action()
 
     # because this is a game for humans, deal cards before game
     for _ in range(len(player_names)):
