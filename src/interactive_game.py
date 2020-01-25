@@ -9,8 +9,6 @@ from src.kariba import Kariba
 
 def interactive_game(n=100):
 
-
-
     human_name         = input("Okay Human! what is your name? ")
     show_opponent_hand = util.str_to_bool(input("Do you want the AI's cards to be visible to you? (y/n)"))
     show_deck          = util.str_to_bool(input("Do you want the contents of the deck to be visible to you? (y/n)"))
@@ -33,7 +31,7 @@ def interactive_game(n=100):
     def get_action():
         action = kariba.action_str_to_arr(input("What's your move?"))
 
-        
+
 
         if any([np.array_equal(action, allowed_action) for allowed_action in kariba.allowed_actions]):
             return action
