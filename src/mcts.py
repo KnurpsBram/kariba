@@ -200,24 +200,122 @@ nodename_generator = NodenameGenerator()
 #     best_action = root_node.best_action
 #     return best_action
 
-# MOISMCTS Multiple-Observer Information Set Monte Carlo Tree Search
-def moismcts(root_node, n=100):
-    ## TEMPORARY PSUEDOCODE
-    trees = [Tree(player1), Tree(Player2)]
-    for _ in tqdm.tqdm(range(n)):
-        kariba = root_node.kariba
-        while not kariba.is_final:
-            deck_draw = kariba.draw_random_cards() # draw card for 1 player. only first time might do nothing
-            kariba.apply_deck_draw(deck_draw)
-            action = trees[kariba.whose_turn].select_action() # select best-UCB action, unless this is a node we know nothing of, then just be random
-            kariba.apply_action(action)
-            for tree in trees:
-                # selecting a node means to either create a new node if it doesn't yet exist for the current state, (considering observability)
-                # or selecting the one that does exists such that you can select one of its children based on UCB.
-                # only create new nodes if the the parent node has made more simulations,
-                # otherwise you'll create a really deep branch upon your very first simulations
-                tree.next_node(kariba)
-            kariba.next_turn()
-        winner = kariba.leading_player
-        for tree in trees:
+# # MOISMCTS Multiple-Observer Information Set Monte Carlo Tree Search
+# def moismcts(root_node, n=100):
+#     ## TEMPORARY PSUEDOCODE
+#     trees = [Tree(player1), Tree(Player2)]
+#     for _ in tqdm.tqdm(range(n)):
+#         kariba = root_node.kariba
+#         while not kariba.is_final:
+#             deck_draw = kariba.draw_random_cards() # draw card for 1 player. only first time might do nothing
+#             kariba.apply_deck_draw(deck_draw)
+#             action = trees[kariba.whose_turn].select_action() # select best-UCB action, unless this is a node we know nothing of, then just be random
+#             kariba.apply_action(action)
+#             for tree in trees:
+#                 # selecting a node means to either create a new node if it doesn't yet exist for the current state, (considering observability)
+#                 # or selecting the one that does exists such that you can select one of its children based on UCB.
+#                 # only create new nodes if the the parent node has made more simulations,
+#                 # otherwise you'll create a really deep branch upon your very first simulations
+#                 tree.next_node(kariba)
+#             kariba.next_turn()
+#         winner = kariba.leading_player
+#         for tree in trees:
+#             tree.backpropagate(winner)
+
+# def moismcts(root_node, n=100):
+#     trees = [Tree(player1), Tree(player2)]
+#
+#     for _ in tqdm.tqdm(range(n)):
+#         while not kariba.is_final:
+#
+#             deck_draw = kariba.draw_random_cards()
+#             kariba.apply_deck_draw(deck_draw)
+#             for tree in trees:
+#                 tree.apply_deck_draw(deck_draw)
+#
+#             action = trees[kariba.whose_turn].select_action()
+#             kariba.apply_action(action)
+#             for tree in trees:
+#                 tree.apply_action(action)
+#
+#             kariba.next_turn()
+#             for tree in trees:
+#                 tree.next_turn()
+#
+#         winner = kariba.leading_player
+#         for tree in trees:
+#             tree.backpropagate(winner)
+
+simulators = [game, Tree(player1), Tree(player2)]
+
+
+class Simulators():
+    '''
+    A class that keeps track of how the game proceeds as viewed by all
+    entities that have an influence. These entities are player0, player1 and the game itself.
+
+    Player0 can view the cards in its own hand, but not the hand of the opponent
+    Player0 can perform an action and put cards from its hand to the field
+    Player0 decides what actions to play based on UCB (random for rollout policy)
+    Player0 can't control what cards to draw from the deck
+
+    Player1 likewise
+
+    The last entity is 'the game itself', it decides what cards to deal to the players
+    '''
+    def __init__(self, game):
+        self.reset_state = copy.deepcopy(game)
+        self.game = game
+        self.trees = [Tree(player) for player in self.game.player_names]
+
+    @property
+    def whose_turn(self):
+        return self.game.whose_turn
+
+    def select_action(self):
+        return self.trees[self.whose_turn].select_action()
+
+    def reset_game(self):
+        self.game = copy.deepcopy(self.reset_state)
+
+    def apply_event(self, event):
+        for simulator in (self.game, *self.trees):
+            simulator.apply_event(event)
+
+    def next_turn(self, event):
+        for simulator in (self.game, *self.trees):
+            simulator.next_turn()
+
+    def backpropagate(self, winner):
+        for tree in self.trees:
             tree.backpropagate(winner)
+
+def moismcts(root_state, n=100):
+    '''
+    Multiple Observer Information Set Monte Carlo Tree Search (MOISMCTS)
+    keeps a separate tree for each player
+    '''
+
+    simulators = Simulators(root_state)
+
+    for _ in tqdm.tqdm(range(n)):
+        simulators.reset_game()
+
+        while not simulators.game.is_final:
+            simulators.apply_event(simulators.game.draw_random_cards())
+            simulators.apply_event(simulators.select_action())
+            simulators.next_turn()
+        winner = simulators.game.leading_player
+        simulators.backpropagate(winner)
+
+event = {
+    "what"  : "deck draw",
+    "who"   : player0,
+    "cards" : [0, 2, 0, 1, ....]
+}
+
+event = {
+    "what"  : "action",
+    "who"   : player1,
+    "cards" : [0, 1, 0, 0, ...]
+}
