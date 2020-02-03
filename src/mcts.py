@@ -246,8 +246,158 @@ nodename_generator = NodenameGenerator()
 #         for tree in trees:
 #             tree.backpropagate(winner)
 
-simulators = [game, Tree(player1), Tree(player2)]
+class Kariba():
+    def __init__(self, deck=None, field=None, hands=None, whose_turn_=0, player_names=["player0","player1"], n_species=8, max_n_hand=5):
+        self.n_species = n_species
+        self.max_n_hand = max_n_hand
 
+        self.whose_turn_  = whose_turn_
+        self.player_names = player_names
+        self.n_players    = len(player_names)
+
+        self.deck       = np.ones(self.n_species, dtype=int) * max(3, self.n_species) if deck is None else deck
+        self.field      = np.zeros(self.n_species, dtype=int)
+        self.hands      = {player : np.zeros(self.n_species, dtype=int) for player in self.player_names}
+        self.scoreboard = {player : 0 for player in self.player_names}
+
+    @property
+    def whose_turn(self):
+        return self.player_names[self.whose_turn_]
+
+    @property
+    def who_next_turn_(self):
+        return (self.whose_turn_ + 1) % self.n_players
+
+    def next_turn(self):
+        self.whose_turn_ = self.who_next_turn_
+
+    def jungle(self, player):
+        jungle = self.deck
+        for player_, hand in self.hands.items():
+            if player_ != player:
+                jungle += self.hands[player_]
+        return jungle
+
+    def apply_event(self, event):
+        if event["kind"] == "deck_draw":
+            self.deck                -= event["cards"]
+            self.hands[event["who"]] += event["cards"]
+
+        if event["kind"] == "action":
+            self.hands[event["who"]] -= event["cards"]
+            self.field               += event["cards"]
+
+            action_animal = np.nonzero(event["cards"])[0][0]
+            if self.field[action_animal] >= 3:
+                # we use fear_animal=-1 to denote a situation where there's no animals to be chased away
+                fear_animal = self.n_species - 1 if action_animal == 0 else max([idx for idx in self.field.nonzero()[0] if idx < action_animal] + [-1])
+                if fear_animal >= 0:
+                    self.scoreboard[self.whose_turn] += self.field[fear_animal]
+                    self.field[fear_animal] = 0
+
+    def allowed_actions(self, player):
+        hand = self.hands[player]
+        cards_list = [n*util.one_hot(idx, n_dim=self.n_species) for idx in range(self.n_species) for n in range(1, int(self.hands[player][idx])+1)]
+        event_list = [{
+            "kind"  : "action",
+            "who"   : player,
+            "cards" : cards
+        } for cards in cardcards_lists]
+        return event_list
+
+    def random_card_draw(self):
+        n_hand = np.sum(self.hands[self.whose_turn])
+        n_to_draw = min(self.max_n_hand - n_hand, np.sum(self.deck))
+
+        cards = np.zeros(self.n_species)
+        for _ in range(n_to_draw):
+            card += util.one_hot(np.random.choice(range(self.n_species), p=self.deck / np.sum(self.deck)), n_dim=self.n_species)
+
+        event = {
+            "kind"  : "deck_draw",
+            "who"   : self.whose_turn,
+            "cards" : cards
+        }
+        return event
+
+def is_equivalent_node(node_a, node_b):
+    # CHECK IF SAME PARENT?!
+    return all([                                     \
+        node_a.player == node_b.player,              \
+        np.array_equal(node_a.hand,   node_b.hand),  \
+        np.array_equal(node_a.field,  node_b.field), \
+        np.array_equal(node_a.jungle, node_b.jungle) \
+    ])
+
+class Node():
+    def __init__(self, game, event=None, player=None, parent=None, c=np.sqrt(2)):
+        self.player = player # an agent
+        self.parent = parent # a node
+        self.children = []
+
+        self.hand       = self.game.hands[self.player]
+        self.field      = self.game.field
+        self.jungle     = self.game.jungle(self.player)
+
+        self.n = 0 # number of simulations run from this node
+
+        # event is the event that transitioned the parent node to the current node
+        self.is_pre_action_node  = (event["kind"] == "deck_draw" and event["who"] == self.player) if event is not None else False # we model the game as if drawing cards happens at the start of the turn
+        self.is_post_action_node = (event["kind"] == "action"    and event["who"] == self.player) if event is not None else False
+
+        if self.is_pre_action_node:
+            self.untried_actions = self.game.allowed_actions(self.player)
+            self.untried_actions.shuffle()
+
+        if self.is_post_action_node:
+            self.action = event["cards"]
+            self.w = 0 # number of simulations won
+            self.c = c # hyperparameter that determines the tradeoff between exploration and exploitation
+            @property
+            def ucb(self):
+                return (self.w / self.n) + self.c * np.sqrt(2*np.log(self.parent.n)/self.n) # what if n==0?
+
+    def backpropagate(self, winner):
+        self.n += 1
+        if self.is_action_node:
+            self.w += winner == self.player
+
+        if self.parent is not None: # backpropagate all the way up to the root node. The root node doesn't have a parent
+            self.parent.backpropagate(winner)
+
+class Tree():
+    def __init__(self, game, player):
+        self.game   = game
+        self.player = player
+
+        self.root_node    = Node(game)
+        self.current_node = self.root_node
+
+        # during selection (self.rollout=False), we select actions based on UCB and keep track of new nodes.
+        # during rollout (self.rollout=True), we select actions randomly and do NOT keep track of new nodes
+        self.rollout = False
+
+    def select_action(self):
+        assert self.current_node.is_pre_action_node, "the node that is supposed to dictate an action is not a pre-action-node"
+        if self.rollout:
+            return np.random.choice(self.game.allowed_actions)
+        else: # try each action at least once, then select action with highest UCB
+            if len(self.current_node.untried_actions) > 0:
+                return self.current_node.untried_actions.pop()
+            return self.current_node.children[np.argmax([child.ucb for child in self.current_node.children])].action
+
+    def apply_event(self, event):
+        self.game.apply_event(event)
+        if not self.rollout: # during rollout, we don't keep track of new nodes. We do during selection
+            new_node = Node(self.game, event=event, player=self.player, parent=self.current_node)
+            # find whether we need to expand or we just need to passively select
+            if not any([is_equivalent_node(child, new_node) for child in self.current_node.children]):
+                self.current_node.children.append(new_node) # expand the tree
+                self.rollout = True # after this node a built tree is no longer available, so we switch to rollout policy
+            self.current_node = new_node
+
+    def backpropagate(self, winner):
+        self.current_node.backpropagate(winner)
 
 class Simulators():
     '''
@@ -266,7 +416,7 @@ class Simulators():
     def __init__(self, game):
         self.reset_state = copy.deepcopy(game)
         self.game = game
-        self.trees = [Tree(player) for player in self.game.player_names]
+        self.trees = [Tree(copy.deepcopy(game), player) for player in self.game.player_names]
 
     @property
     def whose_turn(self):
@@ -277,13 +427,16 @@ class Simulators():
 
     def reset_game(self):
         self.game = copy.deepcopy(self.reset_state)
+        for tree in self.trees:
+            tree.current_node = tree.root_node
+            tree.rollout = False # switch to UCB-policy rather than rollout policy
 
     def apply_event(self, event):
         for simulator in (self.game, *self.trees):
             simulator.apply_event(event)
 
     def next_turn(self, event):
-        for simulator in (self.game, *self.trees):
+        for simulator in (self.game, *self.trees): # don't need to do next_turn on trees?
             simulator.next_turn()
 
     def backpropagate(self, winner):
@@ -293,29 +446,28 @@ class Simulators():
 def moismcts(root_state, n=100):
     '''
     Multiple Observer Information Set Monte Carlo Tree Search (MOISMCTS)
-    keeps a separate tree for each player
+    keeps a separate tree for each player in which the state is encoded according to what the player can observe
     '''
 
     simulators = Simulators(root_state)
 
     for _ in tqdm.tqdm(range(n)):
         simulators.reset_game()
-
         while not simulators.game.is_final:
-            simulators.apply_event(simulators.game.draw_random_cards())
-            simulators.apply_event(simulators.select_action())
+            simulators.apply_event(simulators.game.random_card_draw()) # give cards to the player whose turn it is
+            simulators.apply_event(simulators.select_action()) # the player whose turn it is may select the action, apply the action to both player's trees and the current simulated game
             simulators.next_turn()
         winner = simulators.game.leading_player
         simulators.backpropagate(winner)
 
 event = {
-    "what"  : "deck draw",
+    "kind"  : "deck draw",
     "who"   : player0,
     "cards" : [0, 2, 0, 1, ....]
 }
 
 event = {
-    "what"  : "action",
+    "kind"  : "action",
     "who"   : player1,
     "cards" : [0, 1, 0, 0, ...]
 }
