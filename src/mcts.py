@@ -277,7 +277,7 @@ class Kariba():
 
     @property
     def leading_player(self):
-        return self.player_names[np.argmax(self.scoreboard.values())]
+        return util.keywithmaxval(self.scoreboard)
 
     def next_turn(self):
         self.whose_turn_ = self.who_next_turn_
@@ -319,18 +319,14 @@ class Kariba():
         cards = np.zeros(self.n_species, dtype=int)
         for _ in range(n_to_draw):
 
-            print("inside game.random_card_draw()")
-            print(self.deck)
-            print(np.sum(self.deck))
-            print(self.deck / np.sum(self.deck))
-
-            cards += util.one_hot(np.random.choice(range(self.n_species), p=self.deck / np.sum(self.deck)), n_dim=self.n_species)
+            cards += util.one_hot(np.random.choice(range(self.n_species), p=(self.deck-cards) / np.sum(self.deck-cards)), n_dim=self.n_species)
 
         event = {
             "kind"  : "deck_draw",
             "who"   : self.whose_turn,
             "cards" : cards
         }
+
         return event
 
     def __repr__(self):
@@ -441,8 +437,7 @@ class Tree():
 
     def __repr__(self):
         def print_children(node): # recursion!
-            return "\n".join([util.indent_string(child.__repr__()+print_children(child), indent_spaces=2) for child in node.children])+"\n"
-        # return self.root_node.__repr__()
+            return "\n".join([util.indent_string(child.__repr__()+print_children(child), indent_spaces=4) for child in node.children])+"\n"
         return self.root_node.__repr__() + print_children(self.root_node)
 
 class Simulators():
@@ -462,7 +457,7 @@ class Simulators():
     def __init__(self, game):
         self.reset_state = copy.deepcopy(game)
         self.game      = game
-        self.tree_dict = {player : Tree(game, player) for player in self.game.player_names}
+        self.tree_dict = {player : Tree(self.game, player) for player in self.game.player_names}
         self.trees     = self.tree_dict.values()
 
     @property
@@ -478,8 +473,9 @@ class Simulators():
     def reset_game(self):
         self.game = copy.deepcopy(self.reset_state)
         for tree in self.trees:
+            tree.game = self.game
             tree.current_node = tree.root_node
-            tree.rollout = False # switch to UCB-policy rather than rollout policy
+            tree.is_on_rollout_policy = False # switch to UCB-policy rather than rollout policy
 
     def apply_event(self, event):
         for simulator in (self.game, *self.trees):
@@ -498,13 +494,13 @@ def moismcts(root_state, n=100):
     keeps a separate tree for each player in which the state is encoded according to what the player can observe
     '''
 
-    simulators = Simulators(root_state)
+    simulators = Simulators(copy.deepcopy(root_state))
 
-    for _ in tqdm.tqdm(range(n)):
+    for i in tqdm.tqdm(range(n)):
 
         while not simulators.game.is_final:
             simulators.apply_event(simulators.random_card_draw()) # give cards to the player whose turn it is, at the very first turn, this should not do anything
-            simulators.apply_event(simulators.select_action()) # the player wh ose turn it is may select the action, apply the action to the game and update both the players' trees
+            simulators.apply_event(simulators.select_action()) # the player whose turn it is may select the action, apply the action to the game and update both the players' trees
             simulators.next_turn()
 
         winner = simulators.game.leading_player
@@ -514,11 +510,6 @@ def moismcts(root_state, n=100):
         simulators.backpropagate(winner)
         simulators.reset_game()
 
-        print(simulators.tree_dict["player0"])
-        print(simulators.tree_dict["player1"])
-
-    print("done building tree")
-
     return simulators.select_action(return_best_action=True)
 
 kariba = Kariba()
@@ -526,6 +517,8 @@ event = kariba.random_card_draw()
 kariba.apply_event(event)
 
 root_state = kariba
-# print(root_state)
 
-moismcts(root_state, n=1)
+best_action = moismcts(root_state, n=100)
+
+print(root_state)
+print(best_action)
