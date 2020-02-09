@@ -369,8 +369,7 @@ class Node():
             random.shuffle(self.untried_actions)
 
         if self.is_post_action_node:
-            print("I'm a is_post_action_node!")
-            self.action = event["cards"]
+            self.action = event
             self.w = 0 # number of simulations won
             self.c = c # hyperparameter that determines the tradeoff between exploration and exploitation
 
@@ -407,8 +406,8 @@ class Tree():
         self.root_node    = Node(copy.deepcopy(game), player) # use deepcopy to ensure that if the game changes outside the node, the attributes of the node don't change
         self.current_node = self.root_node
 
-        # during selection (self.rollout=False), we select actions based on UCB and keep track of new nodes.
-        # during rollout (self.rollout=True), we select actions randomly and do NOT keep track of new nodes
+        # during selection (self.is_on_rollout_policy=False), we select actions based on UCB and keep track of new nodes.
+        # during rollout (self.is_on_rollout_policy=True), we select actions randomly and do NOT keep track of new nodes
         self.is_on_rollout_policy = False
 
     def select_action(self, return_best_action=False):
@@ -425,17 +424,6 @@ class Tree():
                 return self.current_node.children[np.argmax([child.ucb for child in self.current_node.children])].action
 
     def apply_event(self, event):
-        # assume the event has already been applied to self.game outside of this function
-        # if not self.is_on_rollout_policy: # during rollout, we don't keep track of new nodes. We do during selection
-        #     new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
-        #     # find whether we need to expand or we just need to passively select
-        #     if not any([is_equivalent_node(child, new_node) for child in (self.current_node, *self.current_node.children)]):
-        #         self.current_node.children.append(new_node) # expand the tree
-        #         self.current_node     = copy.deepcopy(new_node)
-        #         self.current_node_ref = new_node
-        #         if self.current_node.is_pre_action_node:
-        #             self.is_on_rollout_policy = True # after this node a built tree is no longer available, so we switch to rollout policy
-
         if not self.is_on_rollout_policy:
             new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
             if not is_equivalent_node(self.current_node, new_node):
@@ -445,7 +433,7 @@ class Tree():
                         pass
                 self.current_node.children.append(new_node)
                 self.current_node = new_node
-                if self.current_node.is_pre_action_node:
+                if self.current_node.is_post_action_node:
                     self.is_on_rollout_policy = True
 
     def backpropagate(self, winner):
@@ -459,7 +447,7 @@ class Tree():
 class Simulators():
     '''
     A class that keeps track of how the game proceeds as viewed by all
-    entities that have an influence. These entities are player0, player1 and the game itself.
+    entities that can have an influence on the game. These entities are player0, player1 and the game itself.
 
     Player0 can view the cards in its own hand, but not the hand of the opponent
     Player0 can perform an action and put cards from its hand to the field
@@ -516,49 +504,19 @@ def moismcts(root_state, n=100):
 
         while not simulators.game.is_final:
             simulators.apply_event(simulators.random_card_draw()) # give cards to the player whose turn it is, at the very first turn, this should not do anything
-
-
-            print("#"*50)
-            print(simulators.tree_dict["player0"].current_node)
-            print(simulators.tree_dict["player0"].current_node.is_pre_action_node)
-            print(simulators.tree_dict["player0"].current_node.children)
-            for child in simulators.tree_dict["player0"].current_node.children:
-                print(child.is_post_action_node)
-                print(child.action)
-                # print(child.ucb)
-
             simulators.apply_event(simulators.select_action()) # the player whose turn it is may select the action, apply the action to the game and update both the players' trees
             simulators.next_turn()
 
         winner = simulators.game.leading_player
-
-        print("the winner is ", winner, "!")
-        # print(simulators.tree_dict["player1"])
-        #
-        # print("CURRENT NODE")
-        # print(simulators.tree_dict["player1"].current_node)
-        # print(simulators.tree_dict["player1"].current_node.parent)
-        # print(simulators.tree_dict["player1"].current_node.children)
-
-
-
         simulators.backpropagate(winner)
-
-        # print(simulators.tree_dict["player1"])
-
         simulators.reset_game()
-
-
 
     return simulators.select_action(return_best_action=True)
 
-kariba = Kariba()
-event = kariba.random_card_draw()
-kariba.apply_event(event)
-
-root_state = kariba
-
-best_action = moismcts(root_state, n=6)
-#
+# kariba = Kariba()
+# event = kariba.random_card_draw()
+# kariba.apply_event(event)
+# root_state = kariba
+# best_action = moismcts(root_state, n=1000)
 # print(root_state)
 # print(best_action)

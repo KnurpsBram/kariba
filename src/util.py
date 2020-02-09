@@ -16,14 +16,3 @@ def one_hot(idx, n_dim=8):
     x = np.zeros(n_dim, dtype=int)
     x[idx] = 1
     return x
-
-class NodenameGenerator():
-    def __init__(self):
-        self.i = 0
-
-    def __iter__(self):
-        return self
-
-    def __next__(self):
-        self.i += 1
-        return "Node"+str(self.i)
