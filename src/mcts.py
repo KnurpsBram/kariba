@@ -361,7 +361,7 @@ class Node():
 
         # event is the event that transitioned the parent node to the current node
         self.is_root_node        = parent is None
-        self.is_pre_action_node  = (event["kind"] == "deck_draw" and event["who"] == self.player) if event is not None else False or self.is_root_node # we model the game as if drawing cards happens at the start of the turn
+        self.is_pre_action_node  = (event["kind"] == "deck_draw" and event["who"] == self.player) if event is not None else False or (self.is_root_node and game.whose_turn == self.player) # we model the game as if drawing cards happens at the start of the turn
         self.is_post_action_node = (event["kind"] == "action"    and event["who"] == self.player) if event is not None else False
 
         if self.is_pre_action_node:
@@ -369,12 +369,15 @@ class Node():
             random.shuffle(self.untried_actions)
 
         if self.is_post_action_node:
+            print("I'm a is_post_action_node!")
             self.action = event["cards"]
             self.w = 0 # number of simulations won
             self.c = c # hyperparameter that determines the tradeoff between exploration and exploitation
-            @property
-            def ucb(self):
-                return (self.w / self.n) + self.c * np.sqrt(2*np.log(self.parent.n)/self.n) # what if n==0?
+
+    @property
+    def ucb(self):
+        if self.is_post_action_node:
+            return (self.w / self.n) + self.c * np.sqrt(2*np.log(self.parent.n)/self.n) # what if n==0?
 
     def backpropagate(self, winner):
         self.n += 1
@@ -423,17 +426,30 @@ class Tree():
 
     def apply_event(self, event):
         # assume the event has already been applied to self.game outside of this function
-        if not self.is_on_rollout_policy: # during rollout, we don't keep track of new nodes. We do during selection
+        # if not self.is_on_rollout_policy: # during rollout, we don't keep track of new nodes. We do during selection
+        #     new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
+        #     # find whether we need to expand or we just need to passively select
+        #     if not any([is_equivalent_node(child, new_node) for child in (self.current_node, *self.current_node.children)]):
+        #         self.current_node.children.append(new_node) # expand the tree
+        #         self.current_node     = copy.deepcopy(new_node)
+        #         self.current_node_ref = new_node
+        #         if self.current_node.is_pre_action_node:
+        #             self.is_on_rollout_policy = True # after this node a built tree is no longer available, so we switch to rollout policy
+
+        if not self.is_on_rollout_policy:
             new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
-            # find whether we need to expand or we just need to passively select
-            if not any([is_equivalent_node(child, new_node) for child in (self.current_node, *self.current_node.children)]):
-                self.current_node.children.append(new_node) # expand the tree
-                self.is_on_rollout_policy = True # after this node a built tree is no longer available, so we switch to rollout policy
-                self.current_node     = copy.deepcopy(new_node)
-                self.current_node_ref = new_node
+            if not is_equivalent_node(self.current_node, new_node):
+                for child in self.current_node.children:
+                    if is_equivalent_node(child, new_node):
+                        self.current_node = child
+                        pass
+                self.current_node.children.append(new_node)
+                self.current_node = new_node
+                if self.current_node.is_pre_action_node:
+                    self.is_on_rollout_policy = True
 
     def backpropagate(self, winner):
-        self.current_node_ref.backpropagate(winner)
+        self.current_node.backpropagate(winner)
 
     def __repr__(self):
         def print_children(node): # recursion!
@@ -500,15 +516,39 @@ def moismcts(root_state, n=100):
 
         while not simulators.game.is_final:
             simulators.apply_event(simulators.random_card_draw()) # give cards to the player whose turn it is, at the very first turn, this should not do anything
+
+
+            print("#"*50)
+            print(simulators.tree_dict["player0"].current_node)
+            print(simulators.tree_dict["player0"].current_node.is_pre_action_node)
+            print(simulators.tree_dict["player0"].current_node.children)
+            for child in simulators.tree_dict["player0"].current_node.children:
+                print(child.is_post_action_node)
+                print(child.action)
+                # print(child.ucb)
+
             simulators.apply_event(simulators.select_action()) # the player whose turn it is may select the action, apply the action to the game and update both the players' trees
             simulators.next_turn()
 
         winner = simulators.game.leading_player
 
         print("the winner is ", winner, "!")
+        # print(simulators.tree_dict["player1"])
+        #
+        # print("CURRENT NODE")
+        # print(simulators.tree_dict["player1"].current_node)
+        # print(simulators.tree_dict["player1"].current_node.parent)
+        # print(simulators.tree_dict["player1"].current_node.children)
+
+
 
         simulators.backpropagate(winner)
+
+        # print(simulators.tree_dict["player1"])
+
         simulators.reset_game()
+
+
 
     return simulators.select_action(return_best_action=True)
 
@@ -518,7 +558,7 @@ kariba.apply_event(event)
 
 root_state = kariba
 
-best_action = moismcts(root_state, n=100)
-
-print(root_state)
-print(best_action)
+best_action = moismcts(root_state, n=6)
+#
+# print(root_state)
+# print(best_action)
