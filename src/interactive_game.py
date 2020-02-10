@@ -3,9 +3,8 @@ import copy
 import numpy as np
 import IPython.display as ipd
 
-from src import util
-from src import mcts
-from src.mcts import Kariba
+import kariba_moismcts
+import util
 
 class InteractiveKaribaGame():
     def __init__(self, kariba, show_deck, show_opponent_hand, n=100, indent_spaces=4):
@@ -52,6 +51,7 @@ class InteractiveKaribaGame():
             "(☞ﾟ∀ﾟ)☞",
             "ヾ(⌐■_■)ノ♪",
             "~(˘▾˘~)",
+            "(~˘▾˘)~",
             "(•_•) ( •_•)>⌐■-■ (⌐■_■)",
             "☜(⌒▽⌒)☞"
         ]
@@ -64,29 +64,29 @@ class InteractiveKaribaGame():
             return "\n".join([str(arr[i]) + " " + (self.animal_idx_to_str[i]["singular"] if arr[i] == 1 else self.animal_idx_to_str[i]["plural"]) for i in reversed(range(len(arr))) if arr[i] > 0])
 
     def action_str_to_arr(self, s):
-        # try:
-        s = s.replace(" ","").lower() # remove whitespace and case-invariant
-        if s.isdigit() and len(s) == self.n_species: # if typed like 00030000 for '3 giraffes'
-            action = np.array([int(c) for c in s], dtype=int) # change to array
-        if "*" in s: # if typed like 3*4 for '3 giraffes'
-            n = int(s[0])
-            animal_idx = int(s[2])
-            action = n*util.one_hot(animal_idx, n_dim=self.n_species)
-        else:
-            animal_idx = [i for i in range(self.n_species) if any([word in s for word in self.animal_names[i]])]
-            if len(animal_idx) >= 2:
-                print("you submitted more than 1 animal, we'll ignore that and just select the first")
-            animal_idx = animal_idx[0]
-            n = [int(c) for c in s if c.isdigit()]
-            if len(n) > 1:
-                print("you submitted more than 1 number, we'll ignore that and just select the first")
-            if len(n) == 0:
-                print("you submitted no number. We'll assume you meant to play a single card")
-                n = [1]
-            n = n[0]
-            action = n*util.one_hot(animal_idx, n_dim=self.n_species)
-        # except:
-        #     action = np.zeros(self.n_species)
+        try:
+            s = s.replace(" ","").lower() # remove whitespace and case-invariant
+            if s.isdigit() and len(s) == self.n_species: # if typed like 00030000 for '3 giraffes'
+                action = np.array([int(c) for c in s], dtype=int) # change to array
+            if "*" in s: # if typed like 3*4 for '3 giraffes'
+                n = int(s[0])
+                animal_idx = int(s[2])
+                action = n*util.one_hot(animal_idx, n_dim=self.n_species)
+            else:
+                animal_idx = [i for i in range(self.n_species) if any([word in s for word in self.animal_names[i]])]
+                if len(animal_idx) >= 2:
+                    print("you submitted more than 1 animal, we'll ignore that and just select the first")
+                animal_idx = animal_idx[0]
+                n = [int(c) for c in s if c.isdigit()]
+                if len(n) > 1:
+                    print("you submitted more than 1 number, we'll ignore that and just select the first")
+                if len(n) == 0:
+                    print("you submitted no number. We'll assume you meant to play a single card")
+                    n = [1]
+                n = n[0]
+                action = n*util.one_hot(animal_idx, n_dim=self.n_species)
+        except:
+            action = np.zeros(self.n_species)
         return action
 
     def get_action_from_human(self):
@@ -178,12 +178,12 @@ class InteractiveKaribaGame():
             if self.kariba.whose_turn == self.ai_name:
                 print(self.ai_name, "is planning its next move...")
                 time.sleep(1)
-                action = mcts.moismcts(copy.deepcopy(self.kariba), n=self.n)
+                action = kariba_moismcts.moismcts(copy.deepcopy(self.kariba), n=self.n)
 
             self.process_event(action)
             self.kariba.next_turn()
 
-        print(self.kariba.player_names[self.kariba.leading_player], " won!")
+        print(self.kariba.leading_player, " won!")
 
 def interactive_game(n=1000):
     human_name         = input("Okay Human! what is your name? ")
@@ -197,6 +197,6 @@ def interactive_game(n=1000):
     whose_turn_ = np.random.randint(2)
     print("Very well! ", player_names[whose_turn_], " may begin! \n")
 
-    interactive_game = InteractiveKaribaGame(Kariba(player_names = player_names, whose_turn_ = whose_turn_), show_deck, show_opponent_hand, n=n)
+    interactive_game = InteractiveKaribaGame(kariba_moismcts.Kariba(player_names = player_names, whose_turn_ = whose_turn_), show_deck, show_opponent_hand, n=n)
 
     interactive_game.play_game()

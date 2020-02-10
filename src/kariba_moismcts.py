@@ -5,7 +5,7 @@ import random
 import itertools
 import tqdm
 
-from src import util
+import util
 
 class Kariba():
     def __init__(self, deck=None, field=None, hands=None, whose_turn_=0, player_names=["player0","player1"], n_species=8, max_n_hand=5):
@@ -191,8 +191,7 @@ class Tree():
                         pass
                 self.current_node.children.append(new_node)
                 self.current_node = new_node
-                if self.current_node.is_post_action_node:
-                    self.is_on_rollout_policy = True
+                self.is_on_rollout_policy = True
 
     def backpropagate(self, winner):
         self.current_node.backpropagate(winner)
@@ -275,6 +274,6 @@ def moismcts(root_state, n=100):
 # event = kariba.random_card_draw()
 # kariba.apply_event(event)
 # root_state = kariba
-# best_action = moismcts(root_state, n=1000)
+# best_action = moismcts(root_state, n=100)
 # print(root_state)
 # print(best_action)
