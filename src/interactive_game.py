@@ -173,7 +173,7 @@ class InteractiveKaribaGame():
             if self.kariba.whose_turn == self.human_name:
                 self.show_state()
                 action = self.get_action_from_human()
-                ipd.clear_output()
+                # ipd.clear_output()
 
             if self.kariba.whose_turn == self.ai_name:
                 print(self.ai_name, "is planning its next move...")

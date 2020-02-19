@@ -16,7 +16,8 @@ class Kariba():
         self.player_names = player_names
         self.n_players    = len(player_names)
 
-        self.deck       = np.ones(self.n_species, dtype=int) * max(3, self.n_species) if deck is None else deck
+        # self.deck       = np.ones(self.n_species, dtype=int) * max(3, self.n_species) if deck is None else deck
+        self.deck       = np.ones(self.n_species, dtype=int) * max(3, 3) if deck is None else deck
         self.field      = np.zeros(self.n_species, dtype=int)
         self.hands      = {player : np.zeros(self.n_species, dtype=int) for player in self.player_names}
         self.scoreboard = {player : 0 for player in self.player_names}
@@ -76,7 +77,6 @@ class Kariba():
 
         cards = np.zeros(self.n_species, dtype=int)
         for _ in range(n_to_draw):
-
             cards += util.one_hot(np.random.choice(range(self.n_species), p=(self.deck-cards) / np.sum(self.deck-cards)), n_dim=self.n_species)
 
         event = {
@@ -98,11 +98,13 @@ class Kariba():
         return s
 
 def is_equivalent_node(node_a, node_b):
-    return all([                                     \
-        node_a.player == node_b.player,              \
-        np.array_equal(node_a.hand,   node_b.hand),  \
-        np.array_equal(node_a.field,  node_b.field), \
-        np.array_equal(node_a.jungle, node_b.jungle) \
+    return all([                                                  \
+        node_a.player              == node_b.player,              \
+        node_a.is_pre_action_node  == node_a.is_pre_action_node,  \
+        node_a.is_post_action_node == node_a.is_post_action_node, \
+        np.array_equal(node_a.hand,   node_b.hand),               \
+        np.array_equal(node_a.field,  node_b.field),              \
+        np.array_equal(node_a.jungle, node_b.jungle)              \
     ])
 
 class Node():
@@ -119,12 +121,12 @@ class Node():
 
         # event is the event that transitioned the parent node to the current node
         self.is_root_node        = parent is None
-        self.is_pre_action_node  = (event["kind"] == "deck_draw" and event["who"] == self.player) if event is not None else False or (self.is_root_node and game.whose_turn == self.player) # we model the game as if drawing cards happens at the start of the turn
+        self.is_pre_action_node  = (event["kind"] == "deck_draw" and event["who"] == self.player) if event is not None else self.is_root_node #(self.is_root_node and game.whose_turn == self.player) # we model the game as if drawing cards happens at the start of the turn
         self.is_post_action_node = (event["kind"] == "action"    and event["who"] == self.player) if event is not None else False
 
-        if self.is_pre_action_node:
-            self.untried_actions = game.allowed_actions(self.player)
-            random.shuffle(self.untried_actions)
+        # if self.is_pre_action_node:
+        self.untried_actions = game.allowed_actions(self.player)
+        random.shuffle(self.untried_actions)
 
         if self.is_post_action_node:
             self.action = event
@@ -176,22 +178,41 @@ class Tree():
             if self.is_on_rollout_policy: # a random action
                 return np.random.choice(self.game.allowed_actions(self.player))
             else: # try each action at least once, then select action with highest UCB
-                assert self.current_node.is_pre_action_node, "the node that is supposed to dictate an action is not a pre-action-node"
+
+                # if not self.current_node.is_pre_action_node:
+                #     print(self.game)
+                #     print(self.current_node)
+                #     print(self)
+
+
+                # assert self.current_node.is_pre_action_node, "the node that is supposed to dictate an action is not a pre-action-node"
+
+
                 if len(self.current_node.untried_actions) > 0:
                     return self.current_node.untried_actions.pop()
                 return self.current_node.children[np.argmax([child.ucb for child in self.current_node.children])].action
 
     def apply_event(self, event):
+        # if not self.is_on_rollout_policy:
+        #     new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
+        #     if not is_equivalent_node(self.current_node, new_node):
+        #         for existing_node in [self.current_node, *self.current_node.children]:
+        #             if is_equivalent_node(existing_node, new_node):
+        #                 self.current_node = existing_node
+        #                 return
+        #         self.current_node.children.append(new_node)
+        #         self.current_node = new_node
+        #         self.is_on_rollout_policy = True
         if not self.is_on_rollout_policy:
             new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
-            if not is_equivalent_node(self.current_node, new_node):
-                for existing_node in [self.current_node, *self.current_node.children]:
-                    if is_equivalent_node(existing_node, new_node):
-                        self.current_node = existing_node
-                        return
-                self.current_node.children.append(new_node)
-                self.current_node = new_node
-                self.is_on_rollout_policy = True
+            # if not is_equivalent_node(self.current_node, new_node):
+            for existing_node in [self.current_node, *self.current_node.children]:
+                if is_equivalent_node(existing_node, new_node):
+                    self.current_node = existing_node
+                    return
+            self.current_node.children.append(new_node)
+            self.current_node = new_node
+            self.is_on_rollout_policy = True
 
     def backpropagate(self, winner):
         self.current_node.backpropagate(winner)
