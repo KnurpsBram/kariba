@@ -146,14 +146,14 @@ class Node():
 
     def __repr__(self):
         s = \
-        "-------------------------\n" + \
+        "+------------------------\n" + \
+        ("pre_action_node" if self.is_pre_action_node else "post_action_node" if self.is_post_action_node else "neutral_node")+"\n"+\
         "self: " + self.player + "\n" + \
         "n: " + str(self.n) + "\n" + \
         ("w: " + str(self.w) + "\n" if self.is_post_action_node else "") + \
         "jungle:\n" + str(self.jungle) + "\n"+ \
         "field:\n" + str(self.field) + "\n" + \
-        "hand:\n" + str(self.hand) + "\n" + \
-        "-------------------------\n"
+        "hand:\n" + str(self.hand) + "\n"
         return s
 
 class Tree():
@@ -185,10 +185,10 @@ class Tree():
         if not self.is_on_rollout_policy:
             new_node = Node(copy.deepcopy(self.game), event=event, player=self.player, parent=self.current_node)
             if not is_equivalent_node(self.current_node, new_node):
-                for child in self.current_node.children:
-                    if is_equivalent_node(child, new_node):
-                        self.current_node = child
-                        pass
+                for existing_node in [self.current_node, *self.current_node.children]:
+                    if is_equivalent_node(existing_node, new_node):
+                        self.current_node = existing_node
+                        return
                 self.current_node.children.append(new_node)
                 self.current_node = new_node
                 self.is_on_rollout_policy = True
@@ -198,7 +198,7 @@ class Tree():
 
     def __repr__(self):
         def print_children(node): # recursion!
-            return "\n".join([util.indent_string(child.__repr__()+print_children(child), indent_spaces=4) for child in node.children])+"\n"
+            return "\n".join([util.indent_string(child.__repr__()+print_children(child), indent_spaces=4) for child in node.children])
         return self.root_node.__repr__() + print_children(self.root_node)
 
 class Simulators():
@@ -239,7 +239,8 @@ class Simulators():
             tree.is_on_rollout_policy = False # switch to UCB-policy rather than rollout policy
 
     def apply_event(self, event):
-        for simulator in (self.game, *self.trees):
+        # for simulator in [self.game, *self.trees]:
+        for simulator in [self.game, *self.tree_dict.values()]:
             simulator.apply_event(event)
 
     def next_turn(self):
