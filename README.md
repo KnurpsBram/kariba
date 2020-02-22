@@ -10,7 +10,7 @@ First, install required dependencies (either conda or pip)
 ```
 Clone this repo
 ```python
-    git clone <url>
+    git clone https://github.com/KnurpsBram/AI_plays_kariba.git
     cd AI_plays_kariba 
 ```
 To play a game of Kariba against an AI using MOISMCTS, open interactive_game.ipynb. From the command line:
