@@ -7,7 +7,7 @@ import kariba_moismcts
 import util
 
 class InteractiveKaribaGame():
-    def __init__(self, kariba, show_deck, show_opponent_hand, n=100, indent_spaces=4):
+    def __init__(self, kariba, show_deck, show_opponent_hand, n=500, indent_spaces=4):
         self.kariba = kariba
         self.human_name = kariba.player_names[0]
         self.ai_name = kariba.player_names[1]
@@ -183,9 +183,10 @@ class InteractiveKaribaGame():
             self.process_event(action)
             self.kariba.next_turn()
 
+        self.show_state()
         print(self.kariba.leading_player, " won!")
 
-def interactive_game(n=1000):
+def interactive_game(n=500):
     human_name         = input("Okay Human! what is your name? ")
     show_opponent_hand = util.str_to_bool(input("Do you want the AI's cards to be visible to you? (y/n)"))
     show_deck          = util.str_to_bool(input("Do you want the contents of the deck to be visible to you? (y/n)"))

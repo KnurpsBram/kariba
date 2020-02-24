@@ -250,7 +250,7 @@ class Simulators():
         for tree in self.trees:
             tree.backpropagate(winner)
 
-def moismcts(root_state, n=100):
+def moismcts(root_state, n=500):
     '''
     Multiple Observer Information Set Monte Carlo Tree Search (MOISMCTS)
     keeps a separate tree for each player in which the state is encoded according to what the player can observe
@@ -270,11 +270,3 @@ def moismcts(root_state, n=100):
         simulators.reset_game()
 
     return simulators.select_action(return_best_action=True)
-
-# kariba = Kariba()
-# event = kariba.random_card_draw()
-# kariba.apply_event(event)
-# root_state = kariba
-# best_action = moismcts(root_state, n=100)
-# print(root_state)
-# print(best_action)
