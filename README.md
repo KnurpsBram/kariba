@@ -1,5 +1,5 @@
 # Artificial Intelligence learns to play Kariba!
-Python implementation of Multiple-Observer Information Set Monte Carlo Tree Search (MOISMCTS) for the card game Kariba, as described in [this blog](http://www.linktoblog.com).
+Python implementation of Multiple-Observer Information Set Monte Carlo Tree Search (MOISMCTS) for the card game Kariba, as described in [this blog](https://medium.com/@bramkooiman94/artificial-intelligence-plays-kariba-c281052e8dce).
 
 ## Getting Started
 First, install required dependencies (either conda or pip)
